@@ -9,7 +9,7 @@ enablePlugins(GitVersioning)
 git.baseVersion := "1.0"
 git.versionProperty := "DUMMY_BUILD_VERSION"
 
-val checkVersion = taskKey[Unit]("checks the version is the correct versino")
+val checkVersion = taskKey[Unit]("checks the version is the correct version")
 checkVersion := {
   val v = (version in a).value
   val v2 = (version in b).value

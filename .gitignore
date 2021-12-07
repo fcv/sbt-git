@@ -6,3 +6,8 @@ target/
 /.cache
 /.classpath
 /.project
+
+# BSP (Build Server Protocol)
+# see https://www.scala-lang.org/blog/2020/10/27/bsp-in-sbt.html
+# see https://build-server-protocol.github.io/
+.bsp/*

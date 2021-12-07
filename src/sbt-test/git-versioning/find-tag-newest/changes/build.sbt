@@ -5,7 +5,7 @@ enablePlugins(GitVersioning)
 git.baseVersion := "0.1"
 git.versionProperty := "DUMMY_BUILD_VERSION"
 
-val checkVersion = inputKey[Unit]("checks the version is the tag versino")
+val checkVersion = inputKey[Unit]("checks the version is the tag version")
 checkVersion := {
   val Seq(v) = spaceDelimited("<arg>").parsed
   val v2 = version.value
