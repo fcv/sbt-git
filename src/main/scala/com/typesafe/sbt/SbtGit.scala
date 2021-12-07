@@ -3,6 +3,7 @@ package com.typesafe.sbt
 import sbt._
 import Keys._
 import git.{ConsoleGitRunner, DefaultReadableGit, GitRunner, JGitRunner, ReadableGit}
+import scala.math.Ordering
 import sys.process.Process
 
 /** This plugin has all the basic 'git' functionality for other plugins. */
@@ -28,6 +29,7 @@ object SbtGit {
     val useGitDescribe = SettingKey[Boolean]("use-git-describe", "Get version by calling `git describe` on the repository")
     val gitDescribePatterns = SettingKey[Seq[String]]("git-describe-patterns", "Patterns to `--match` against when using `git describe`")
     val gitTagToVersionNumber = SettingKey[String => Option[String]]("git-tag-to-version-number", "Converts a git tag string to a version number.")
+    val versionNumberOrdering = SettingKey[Option[Ordering[String]]]("version-number-ordering", "The order to be applied when multiple versions are found on current HEAD")
 
     // Component version strings.  We use these when determining the actual version.
     val formattedShaVersion = settingKey[Option[String]]("Completely formatted version string which will use the git SHA. Override this to change how the SHA version is formatted.")
@@ -186,6 +188,7 @@ object SbtGit {
           val base = git.baseVersion.?.value
           git.defaultFormatDateVersion(base, new java.util.Date)
         },
+        versionNumberOrdering in ThisBuild := Some(git.defaultVersionNumberOrdering),
         isSnapshot in ThisBuild := {
           git.gitCurrentTags.value.isEmpty || git.gitUncommittedChanges.value
         },
@@ -195,7 +198,8 @@ object SbtGit {
           val uncommittedSuffix =
             git.makeUncommittedSignifierSuffix(git.gitUncommittedChanges.value, git.uncommittedSignifier.value)
           val releaseVersion =
-            git.releaseVersion(git.gitCurrentTags.value, git.gitTagToVersionNumber.value, uncommittedSuffix)
+            git.releaseVersion(git.gitCurrentTags.value, git.gitTagToVersionNumber.value,
+              git.versionNumberOrdering.value.getOrElse(Ordering.String.reverse), uncommittedSuffix)
           val describedVersion =
             git.flaggedOptional(git.useGitDescribe.value, git.describeVersion(git.gitDescribedVersion.value, uncommittedSuffix))
           val datedVersion = formattedDateVersion.value
@@ -225,6 +229,7 @@ object SbtGit {
     val gitCurrentBranch = GitKeys.gitCurrentBranch in ThisBuild
     val gitTagToVersionNumber = GitKeys.gitTagToVersionNumber in ThisBuild
     val baseVersion = GitKeys.baseVersion in ThisBuild
+    val versionNumberOrdering = GitKeys.versionNumberOrdering in ThisBuild
     val versionProperty = GitKeys.versionProperty in ThisBuild
     val gitUncommittedChanges = GitKeys.gitUncommittedChanges in ThisBuild
     val uncommittedSignifier = GitKeys.uncommittedSignifier in ThisBuild
@@ -247,6 +252,9 @@ object SbtGit {
         baseVersion.map(_ +"-").getOrElse("") + (df format (new java.util.Date))
     }
 
+    val defaultVersionNumberOrdering: Ordering[String] =
+      Ordering.comparatorToOrdering(versionsort.VersionHelper.compare).reverse
+
     def flaggedOptional(flag: Boolean, value: Option[String]): Option[String] =
       if(flag) value
       else None
@@ -258,14 +266,14 @@ object SbtGit {
       gitDescribedVersion.map(_ + suffix)
     }
 
-    def releaseVersion(currentTags: Seq[String], releaseTagVersion: String => Option[String], suffix: String): Option[String] = {
+    def releaseVersion(currentTags: Seq[String], releaseTagVersion: String => Option[String], versionNumberOrdering: Ordering[String], suffix: String): Option[String] = {
       val releaseVersions =
         for {
           tag <- currentTags
           version <- releaseTagVersion(tag)
         } yield version + suffix
       // NOTE - Selecting the last tag or the first tag should be an option.
-      releaseVersions.sortWith { versionsort.VersionHelper.compare(_, _) > 0 }.headOption
+      releaseVersions.sorted(versionNumberOrdering).headOption
     }
     def overrideVersion(versionProperty: String) = Option(sys.props(versionProperty))
 
